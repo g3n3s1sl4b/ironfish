@@ -17,7 +17,8 @@ import { ValidationError } from '../rpc/adapters/errors'
 import { IDatabaseTransaction } from '../storage'
 import { PromiseResolve, PromiseUtils, SetTimeoutToken } from '../utils'
 import { WorkerPool } from '../workerPool'
-import { Account, AccountDefaults, AccountsDB } from './accountsdb'
+import { Account } from './account'
+import { AccountDefaults, AccountsDB, SerializedAccount } from './accountsdb'
 import { validateAccount } from './validator'
 
 type SyncTransactionParams =
@@ -593,7 +594,7 @@ export class Accounts {
 
     const scanFor = Array.from(this.accounts.values())
       .filter((a) => a.rescan !== null && a.rescan <= scan.startedAt)
-      .map((a) => a.name)
+      .map((a) => a.displayName)
       .join(', ')
 
     this.logger.info(`Scanning for transactions${scanFor ? ` for ${scanFor}` : ''}`)
@@ -925,7 +926,7 @@ export class Accounts {
 
     const key = generateKey()
 
-    const account: Account = {
+    const serializedAccount: SerializedAccount = {
       ...AccountDefaults,
       name: name,
       incomingViewKey: key.incoming_view_key,
@@ -933,6 +934,8 @@ export class Accounts {
       publicAddress: key.public_address,
       spendingKey: key.spending_key,
     }
+
+    const account = new Account(serializedAccount)
 
     this.accounts.set(account.name, account)
     await this.db.setAccount(account)
@@ -950,17 +953,19 @@ export class Accounts {
     await this.scanTransactions()
   }
 
-  async importAccount(toImport: Partial<Account>): Promise<Account> {
+  async importAccount(toImport: Partial<SerializedAccount>): Promise<Account> {
     validateAccount(toImport)
 
     if (toImport.name && this.accounts.has(toImport.name)) {
       throw new Error(`Account already exists with the name ${toImport.name}`)
     }
 
-    const account = {
+    const serializedAccount: SerializedAccount = {
       ...AccountDefaults,
       ...toImport,
     }
+
+    const account = new Account(serializedAccount)
 
     this.accounts.set(account.name, account)
     await this.db.setAccount(account)
